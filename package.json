@@ -1,0 +1,43 @@
+{
+  "name": "seneca-zookeeper-registry",
+  "version": "0.1.0",
+  "description": "Seneca service registry connecting to zookeeper.",
+  "main": "zookeeper-registry.js",
+  "scripts": {
+    "test": "./test.sh",
+    "build": "./build.sh"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/robbdempsey/seneca-zookeeper-registry"
+  },
+  "keywords": [
+    "seneca",
+    "plugin",
+    "service",
+    "registry",
+    "key",
+    "value",
+    "store",
+    "zookeeper"
+  ],
+  "author": "Robb Dempsey (https://twitter.com/robbdempsey)",
+  "contributors": [
+    "Richard Rodger (http://richardrodger.com)"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "node-zookeeper-client": "^0.2.2",
+    "underscore": "^1.8.2"
+  },
+  "devDependencies": {
+    "docco": "~0.6.3",
+    "jshint": "~2.6.0",
+    "mocha": "~2.1.0",
+    "seneca": "~0.6.1"
+  },
+  "files": [
+    "README.md",
+    "zookeeper-registry.js"
+  ]
+}
