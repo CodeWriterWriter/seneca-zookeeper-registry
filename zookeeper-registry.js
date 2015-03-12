@@ -4,12 +4,12 @@ var util = require('util')
 var zookeeper = require('node-zookeeper-client')
 var zkClient
 var _ = require('underscore')
-
+var bigstore = {}
 
 module.exports = function(opts) {
 	var seneca = this
 	var plugin = 'seneca-zookeeper-registry'
-	var store
+	var store = {}
 
 	seneca.add( {role:plugin, cmd:'create'}, cmd_create)
 	seneca.add( {role:plugin, cmd:'set'},    cmd_set)
@@ -40,14 +40,14 @@ module.exports = function(opts) {
 
 	function cmd_list( args, done ) {
 		var recurse = args.recurse || false
-		var list = {}
 
-		list[args.key] =  {}
-		listchildren(args.key, args.key, list, recurse, loadchildren, function childrenloaded(error, result) {
+		store[args.key] =  {}
+		listchildren(args.key, args.key, store, recurse, loadchildren, function childrenloaded(error, result) {
 			if (error) { 
 				done(error) 
 			}
-			done(null, result)
+
+			done(null, store)
 		})
 
 	}
@@ -57,7 +57,10 @@ module.exports = function(opts) {
 	}
 
 	return {
-		name: plugin
+		name: plugin,
+		exportmap: {
+			store:  function() { return store}
+		} 
 	}
 
 }
@@ -175,49 +178,73 @@ function removeznode(path, cb) {
 	)
 }
 
-function listchildren(path, key, list, recurse, next, cb) {
-
-
+function listchildren(path, key, store, recurse, next, cb) {
     zkClient.getChildren(
         path,
         function (event) {
         	// watch /path for changes
-        	listchildren(path, list, next, cb)
+        	listchildren(path, store, recurse, next, cb)
         },
         function (error, children, stat) {
             if (error) {
             	return cb(error)
             }
 
-            next(path, key, children, list, recurse, next, cb)
+            next(path, key, children, store, recurse, next, cb)
         }
         
     );
 }
 
+
+var childqueue = []
+var all = {}
 // builds the list object
-function loadchildren(path, key, children, list, recurse, next, cb) {
-	var child, parentnode = {} 
+function loadchildren(path, key, children, store, recurse, next, cb) {
+	var child, qchild, parentnode = {} 
 	var znode = {}
+	var haschildren = false
+	var rootpath = path
 
 	while (child = children.shift()) {
 		var zchild = {}
+		zchild.value = null
+		zchild.parent = rootpath
 		zchild.key = child
  		zchild.path = path === '/' ? path + child : path + '/' + child;	
-		znode[child] = zchild
-	}
+ 		zchild.nodes = {}
+	 	znode[child] = zchild
 		
+		childqueue.push(zchild)			
+		haschildren = true
+	}
+
 	parentnode[path] = znode
+	_.extend( store, parentnode )
 
-	_.extend( list, parentnode )
-
-	if (recurse == true) {
-		// need to finish the recursvie building of the tree
-		cb(new Error('recursive on children is not implemented'))
+		
+	if (recurse == true ) {
 	
+		// while (qchild = childqueue.shift()) {
+		// 	console.log(qchild)
+		// 	setTimeout(listchildren, 15, qchild.path, qchild.key, qchild, recurse, next, cb)
+		// }
+
+		_.each(store[path], function(child) {
+			listchildren(child.path, child.key, child, recurse, next, cb)
+		})
+
 	} else {
-		cb(null, list)
+		cb (null, store)
 	}
 }
+
+function processQueue(cb) {
+
+
+
+}
+
+
 
 
