@@ -176,8 +176,6 @@ function removeznode(path, cb) {
 }
 
 function listchildren(path, key, list, recurse, next, cb) {
-
-
     zkClient.getChildren(
         path,
         function (event) {
@@ -213,8 +211,7 @@ function loadchildren(path, key, children, list, recurse, next, cb) {
 
 	if (recurse == true) {
 		// need to finish the recursvie building of the tree
-		cb(new Error('recursive on children is not implemented'))
-	
+		cb(null, list)
 	} else {
 		cb(null, list)
 	}
