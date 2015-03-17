@@ -4,12 +4,12 @@ var util = require('util')
 var zookeeper = require('node-zookeeper-client')
 var zkClient
 var _ = require('underscore')
-var bigstore = {}
+var stack = {}
 
 module.exports = function(opts) {
 	var seneca = this
 	var plugin = 'seneca-zookeeper-registry'
-	var store = {}
+	var store
 
 	seneca.add( {role:plugin, cmd:'create'}, cmd_create)
 	seneca.add( {role:plugin, cmd:'set'},    cmd_set)
@@ -18,6 +18,8 @@ module.exports = function(opts) {
 	seneca.add( {role:plugin, cmd:'remove'}, cmd_remove)
 
 	seneca.add( {init:plugin}, function(args, done) {
+		store = {}
+		
 		zkconnect(opts.server, opts.port, function(error, result) {
 			if (error) { return done(error) }
 
@@ -57,10 +59,7 @@ module.exports = function(opts) {
 	}
 
 	return {
-		name: plugin,
-		exportmap: {
-			store:  function() { return store}
-		} 
+		name: plugin
 	}
 
 }
@@ -109,7 +108,7 @@ function createznode(path, value, cb) {
 			    		return cb(error)
 			    	}
 
-			    	return cb(null, stat)	
+			    	return cb(null, util.format('%s created with value %s', path, value))	
 			    }
 			)
 		} else {
@@ -198,7 +197,6 @@ function listchildren(path, key, store, recurse, next, cb) {
 
 
 var childqueue = []
-var all = {}
 // builds the list object
 function loadchildren(path, key, children, store, recurse, next, cb) {
 	var child, qchild, parentnode = {} 
@@ -212,30 +210,34 @@ function loadchildren(path, key, children, store, recurse, next, cb) {
 		zchild.parent = rootpath
 		zchild.key = child
  		zchild.path = path === '/' ? path + child : path + '/' + child;	
- 		zchild.nodes = {}
 	 	znode[child] = zchild
+
+		if (!store[znode]) {
+			//parentnode[path] = znode
+			_.extend( store, znode )
+
+		}
 		
-		childqueue.push(zchild)			
-		haschildren = true
+		childqueue.push(zchild)
 	}
 
-	parentnode[path] = znode
-	_.extend( store, parentnode )
 
-		
-	if (recurse == true ) {
+	if (recurse == true && childqueue.length > 0) {
 	
-		// while (qchild = childqueue.shift()) {
-		// 	console.log(qchild)
-		// 	setTimeout(listchildren, 15, qchild.path, qchild.key, qchild, recurse, next, cb)
-		// }
-
-		_.each(store[path], function(child) {
-			listchildren(child.path, child.key, child, recurse, next, cb)
-		})
-
+		while (child = childqueue.shift()) {
+			console.log(child.key)
+			listchildren(child.path, child.key, store, recurse, next, cb)
+		}
+	
 	} else {
-		cb (null, store)
+		// we end up here 3 times with /data-test key
+
+
+		// we have everything? load values based on paths
+		console.log('done?')
+		console.log(store)
+
+		//cb (null, store)
 	}
 }
 

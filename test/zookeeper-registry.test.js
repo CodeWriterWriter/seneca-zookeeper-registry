@@ -1,37 +1,50 @@
 "use strict";
-
 // mocha zookeeper-registry.test.js
 
 var util   = require('util')
 var assert = require('assert')
 
-var _   = require('lodash')
 var seneca = require('seneca')
 
-
-describe('plugin', function(){
-
-  it('getset', function(fin) {
-    var si = seneca({log:'silent'})
-    si.use('..')
-    var store = si.export('registry/store')
+describe('seneca-zookeeper-registry', function(){
+  var si = seneca({log: 'silent'})
+ 
+  it('create the key with a value', function(fin) {
+     var expected = '/k1 created with value v1'
 
     si
-        .start(fin)
-        
-        .wait('role:registry,cmd:set,key:k1,value:v1')
-        .step(function(){
-            assert.deepEqual(store(), { k1: { '$': 'v1' } })
-            return true;
-        })
+      .use('zookeeper-registry', {server: '127.0.0.1', port: '2181'})
+      .ready()
+      .act(
+        {role:'seneca-zookeeper-registry',cmd:'create'}, 
+        {key:'/k1', value:'v1'  }, 
+        function(error, result) {
+          if (error) { fin(error) } 
+          assert.equal(result, create_exp)
+          // assert doesn't throw immediately
+          // causes timeout and fin() is never called
+          fin()
+        }
+      )
 
-      // .wait('role:registry,cmd:get,key:k1')
-      // .step(function(data){
-      //   assert('v1'==data.value)
-      //   assert.deepEqual(store(), { k1: { '$': 'v1' } })
-      //   return true;
-      // })
-
-      .end()
   })
+
+  it('get the keys value', function(fin) {
+    // var si = seneca({log: 'silent'})
+    var expected = 'f1'
+
+    si
+      .use('zookeeper-registry', {server: '127.0.0.1', port: '2181'})
+      .ready()
+      .act(
+        {role:'seneca-zookeeper-registry',cmd:'get'}, 
+        {key:'/k1'}, 
+        function (error, result) {
+          if (error) { fin(error) }
+          //assert.equal(result, expected)
+          fin()
+        }
+      )
+  })
+
 })

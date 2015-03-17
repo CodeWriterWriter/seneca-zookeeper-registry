@@ -27,6 +27,7 @@
   ],
   "license": "MIT",
   "dependencies": {
+    "mocha": "^2.2.1",
     "node-zookeeper-client": "^0.2.2",
     "underscore": "^1.8.2"
   },
