@@ -4,12 +4,12 @@ var util = require('util')
 var zookeeper = require('node-zookeeper-client')
 var zkClient
 var _ = require('underscore')
-var stack = {}
 
 module.exports = function(opts) {
 	var seneca = this
 	var plugin = 'seneca-zookeeper-registry'
 	var store
+	var stack
 
 	seneca.add( {role:plugin, cmd:'create'}, cmd_create)
 	seneca.add( {role:plugin, cmd:'set'},    cmd_set)
@@ -19,6 +19,7 @@ module.exports = function(opts) {
 
 	seneca.add( {init:plugin}, function(args, done) {
 		store = {}
+		stack = {}
 		
 		zkconnect(opts.server, opts.port, function(error, result) {
 			if (error) { return done(error) }
@@ -44,12 +45,12 @@ module.exports = function(opts) {
 		var recurse = args.recurse || false
 
 		store[args.key] =  {}
-		listchildren(args.key, args.key, store, recurse, loadchildren, function childrenloaded(error, result) {
-			if (error) { 
-				done(error) 
-			}
 
-			done(null, store)
+		getchildren(args.key, stack, recurse, loadchildren, function(error, stack) {
+			if (error) { cb(error) }
+
+			buildStore(stack, done)
+
 		})
 
 	}
@@ -158,7 +159,7 @@ function getznodedatanowatch(path, cb) {
 	        	return cb(error)
 	        }
 
-	        return cb(null, data.toString('utf8'))
+	        return cb(null, path, data.toString('utf8'))
 	    }
 	);
 }
@@ -177,76 +178,119 @@ function removeznode(path, cb) {
 	)
 }
 
-function listchildren(path, key, store, recurse, next, cb) {
+function listchildren(path, stack, cb) {
     zkClient.getChildren(
         path,
         function (event) {
         	// watch /path for changes
-        	listchildren(path, store, recurse, next, cb)
+        	listchildren(path, stack, cb)
         },
         function (error, children, stat) {
             if (error) {
             	return cb(error)
             }
 
-            next(path, key, children, store, recurse, next, cb)
+            cb(null, path, stack, children)
         }
         
     );
 }
 
 
-var childqueue = []
+
 // builds the list object
-function loadchildren(path, key, children, store, recurse, next, cb) {
-	var child, qchild, parentnode = {} 
-	var znode = {}
-	var haschildren = false
-	var rootpath = path
+function getchildren(path, stack, recurse, next, cb) {
+	var child, qchild
+	var parentnode = {}, znode = {}, zchild = {}
+	var childqueue = []
 
-	while (child = children.shift()) {
-		var zchild = {}
-		zchild.value = null
-		zchild.parent = rootpath
-		zchild.key = child
- 		zchild.path = path === '/' ? path + child : path + '/' + child;	
-	 	znode[child] = zchild
+	var processChildren = function(error, path, stack, children) {
+		/*	find the child in the stack and see who is its parent, then decrement the queue */
+		_.each(stack, function(value, key) {
+			// do we have this path in the stack?
+			if (value.path == path) {
+				_.each(childqueue, function(qchild) {
+					// do we have the parent path in the stack?
+					if (qchild.path == value.parent) {
+						if (qchild.num > 0) {
+							qchild.num--
 
-		if (!store[znode]) {
-			//parentnode[path] = znode
-			_.extend( store, znode )
+							if (qchild.num == 0) {
+								// once we've processed all children remove from queue
+								childqueue = _.reject(childqueue, function(del) {
+									return del === qchild
+								})
+							}
+						}
+					}// qchild.path
+				})// each
+			}// value.path
+		})// each
 
+		if (children.length > 0) {
+			parentnode = {
+				path: path,
+				num: children.length
+			}
+			/* add to queue */
+			childqueue.push(parentnode)
+
+			while (child = children.shift()) {
+				var zchild = {}
+				zchild.value = null
+				zchild.parent = path
+				zchild.key = child
+				zchild.path = path === '/' ? path + child : path + '/' + child;	
+				znode[child] = zchild
+				_.extend(stack, znode)
+
+				listchildren(zchild.path, stack, processChildren)
+			}			
+		} else if (childqueue.length > 0) {
+			//still processing children
+		} else {
+			/* done with gathering children, need to gather values and then flatten*/
+			next(stack, cb)
 		}
-		
-		childqueue.push(zchild)
 	}
-
-
-	if (recurse == true && childqueue.length > 0) {
 	
-		while (child = childqueue.shift()) {
-			console.log(child.key)
-			listchildren(child.path, child.key, store, recurse, next, cb)
-		}
-	
-	} else {
-		// we end up here 3 times with /data-test key
-
-
-		// we have everything? load values based on paths
-		console.log('done?')
-		console.log(store)
-
-		//cb (null, store)
-	}
+	listchildren(path, stack, processChildren)
 }
 
-function processQueue(cb) {
+/* takes the store object and gets values for all its children */
+function loadchildren(store, cb) {
+	var child
+	var loadqueue = []
 
+	var processValue = function(error, path, result) {
+		_.each(store, function(value, key) {
+			if (value.path == path) {
+				/* remove from queue */
+				loadqueue = _.reject(loadqueue, function(del) {
+					return del === value
+				})
 
+				value.value = result
+			}
+		})
 
+		if (loadqueue.length == 0) {
+			cb(null, store)
+		}
+	}
+
+	/* load queue and get data */
+	_.each(store, function(value, key) {
+		if (value.path) {
+			loadqueue.push(value)
+			getznodedatanowatch(value.path,  processValue)			
+		}
+	})
 }
 
+function buildStore(store, cb) {
+	console.log('buildStore')
 
-
+	cb(null, store)
+}
 
