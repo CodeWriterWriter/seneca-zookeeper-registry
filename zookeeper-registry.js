@@ -273,6 +273,7 @@ function loadchildren(stack, cb) {
 		if (loadqueue.length == 0) {
 			cb(null, stack)
 		}
+
 	}
 
 	/* load queue and get data */
