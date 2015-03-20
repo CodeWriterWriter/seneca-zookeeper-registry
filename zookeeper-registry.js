@@ -44,13 +44,11 @@ module.exports = function(opts) {
 	function cmd_list( args, done ) {
 		var recurse = args.recurse || false
 
-		store[args.key] =  {}
-
 		getchildren(args.key, stack, recurse, loadchildren, function(error, stack) {
-			if (error) { cb(error) }
+			if (error) { done(error) }
 
-			buildStore(stack, done)
-
+			store[args.key] = {}
+			rebuildStore(stack, store, args.key, done)
 		})
 
 	}
@@ -196,8 +194,6 @@ function listchildren(path, stack, cb) {
     );
 }
 
-
-
 // builds the list object
 function getchildren(path, stack, recurse, next, cb) {
 	var child, qchild
@@ -258,12 +254,12 @@ function getchildren(path, stack, recurse, next, cb) {
 }
 
 /* takes the store object and gets values for all its children */
-function loadchildren(store, cb) {
+function loadchildren(stack, cb) {
 	var child
 	var loadqueue = []
 
 	var processValue = function(error, path, result) {
-		_.each(store, function(value, key) {
+		_.each(stack, function(value, key) {
 			if (value.path == path) {
 				/* remove from queue */
 				loadqueue = _.reject(loadqueue, function(del) {
@@ -275,12 +271,12 @@ function loadchildren(store, cb) {
 		})
 
 		if (loadqueue.length == 0) {
-			cb(null, store)
+			cb(null, stack)
 		}
 	}
 
 	/* load queue and get data */
-	_.each(store, function(value, key) {
+	_.each(stack, function(value, key) {
 		if (value.path) {
 			loadqueue.push(value)
 			getznodedatanowatch(value.path,  processValue)			
@@ -288,9 +284,62 @@ function loadchildren(store, cb) {
 	})
 }
 
-function buildStore(store, cb) {
-	console.log('buildStore')
+function _listchildren(stack, path) {
+    var children = _.filter(stack, function(item) {
+        if (item.parent == path) {
+           return item
+        }
+    })
 
-	cb(null, store)
+    return children
+}
+
+// build a root child
+function _bc(parent, key, child) {
+    var child_key = child.key
+    delete child['path']
+    delete child['parent']
+    delete child['key']
+
+    parent[key][child_key] = child
+    return parent
+}
+
+// build a leaf child
+function _bc2(parent, child) {
+    parent[child.key] = { value: child.value }
+    return parent
+}
+
+// used for traversing children
+var rbq = []
+// traverse children
+function rebuildStore(stack, parent, path, cb) {
+    var child
+    var c = _listchildren(stack, path)
+
+    while ( child = c.shift() ) {
+        // add child to the q while we gather leaf children
+        rbq.push(child.path)
+
+        var p = rebuildStore(stack, child, child.path, cb)
+
+        // remove child from the q once we have all the children
+        rbq = _.filter(rbq, function(item) { return item == p.path })
+
+        if (parent.path) {
+            // this is a child node coming back
+            parent = _bc2(parent, p)
+        } else {
+            // need to add this to root
+            parent = _bc(parent, path, p)
+        }
+
+        if (rbq.length == 0) {
+            cb(null, parent)
+        }
+    }
+    // end leaf
+    return parent
 }
 
