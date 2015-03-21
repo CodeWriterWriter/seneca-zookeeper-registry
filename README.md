@@ -63,7 +63,7 @@ removes the key
 
 Parameters:
 
-   * key:   string; key name
+	* key:   string; key name
 
 Response: string; [key] removed.
 
@@ -74,6 +74,6 @@ lists the children for the key.  if the recurse option is set to true, this will
 Parameters:
 
 	* key:   string; key name
-	* recurse: boolean; optional with default of false
+	* recurse: boolean; optional with default to false
 
 Response: object; 
