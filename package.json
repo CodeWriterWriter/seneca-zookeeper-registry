@@ -4,8 +4,7 @@
   "description": "Seneca service registry connecting to zookeeper.",
   "main": "zookeeper-registry.js",
   "scripts": {
-    "test": "./test.sh",
-    "build": "./build.sh"
+    "test": "./test.sh"
   },
   "repository": {
     "type": "git",
@@ -35,7 +34,6 @@
   "devDependencies": {
     "docco": "~0.6.3",
     "jshint": "~2.6.0",
-    "mocha": "~2.1.0",
     "seneca": "~0.6.1"
   },
   "files": [
