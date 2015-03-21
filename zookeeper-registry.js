@@ -44,7 +44,7 @@ module.exports = function(opts) {
 	function cmd_list( args, done ) {
 		var recurse = args.recurse || false
 
-		getchildren(args.key, stack, recurse, loadchildren, function(error, stack) {
+		getchildren(args.key, stack, recurse, function(error, stack) {
 			if (error) { done(error) }
 
 			store[args.key] = {}
@@ -176,7 +176,7 @@ function removeznode(path, cb) {
 	)
 }
 
-function listchildren(path, stack, cb) {
+function listchildren(path, stack, recurse, cb) {
     zkClient.getChildren(
         path,
         function (event) {
@@ -188,73 +188,51 @@ function listchildren(path, stack, cb) {
             	return cb(error)
             }
 
-            cb(null, path, stack, children)
+            cb(null, path, stack, recurse, children)
         }
         
     );
 }
 
-// builds the list object
-function getchildren(path, stack, recurse, next, cb) {
-	var child, qchild
-	var parentnode = {}, znode = {}, zchild = {}
-	var childqueue = []
+var cqueue = []
+// build the stack from the path and then load all values
+function getchildren(path, stack, recurse, cb) {
 
-	var processChildren = function(error, path, stack, children) {
-		/*	find the child in the stack and see who is its parent, then decrement the queue */
-		_.each(stack, function(value, key) {
-			// do we have this path in the stack?
-			if (value.path == path) {
-				_.each(childqueue, function(qchild) {
-					// do we have the parent path in the stack?
-					if (qchild.path == value.parent) {
-						if (qchild.num > 0) {
-							qchild.num--
+	function _gc(error, path, stack, recurse, children) {
+		//if (error) { return cb(error) }
 
-							if (qchild.num == 0) {
-								// once we've processed all children remove from queue
-								childqueue = _.reject(childqueue, function(del) {
-									return del === qchild
-								})
-							}
-						}
-					}// qchild.path
-				})// each
-			}// value.path
-		})// each
+		var child
+		var znode = {}, zchild = {}
 
-		if (children.length > 0) {
-			parentnode = {
-				path: path,
-				num: children.length
+		while (child = children.shift()) {
+			var zchild = {}
+			zchild.value = null
+			zchild.parent = path
+			zchild.key = child
+			zchild.path = path === '/' ? path + child : path + '/' + child;	
+			znode[child] = zchild
+			_.extend(stack, znode)
+
+			if (recurse == true) {
+				cqueue.push(zchild.path)
+				listchildren(zchild.path, stack, recurse, _gc)
 			}
-			/* add to queue */
-			childqueue.push(parentnode)
+		}
 
-			while (child = children.shift()) {
-				var zchild = {}
-				zchild.value = null
-				zchild.parent = path
-				zchild.key = child
-				zchild.path = path === '/' ? path + child : path + '/' + child;	
-				znode[child] = zchild
-				_.extend(stack, znode)
+		// remove from q when we are done listing children
+		cqueue = _.reject(cqueue, function(del) { return del === path })
 
-				listchildren(zchild.path, stack, processChildren)
-			}			
-		} else if (childqueue.length > 0) {
-			//still processing children
-		} else {
-			/* done with gathering children, need to gather values and then flatten*/
-			next(stack, cb)
+		if (cqueue.length == 0 ) {
+			// finished processsing all children
+			loadstackvalues(stack, cb)
 		}
 	}
-	
-	listchildren(path, stack, processChildren)
+
+	listchildren(path, stack, recurse, _gc)	
 }
 
-/* takes the store object and gets values for all its children */
-function loadchildren(stack, cb) {
+/* takes the stack and gets values for all items */
+function loadstackvalues(stack, cb) {
 	var child
 	var loadqueue = []
 
@@ -312,7 +290,7 @@ function _bc2(parent, child) {
     return parent
 }
 
-// used for traversing children
+// q used for traversing children
 var rbq = []
 // traverse children
 function rebuildStore(stack, parent, path, cb) {
@@ -326,7 +304,7 @@ function rebuildStore(stack, parent, path, cb) {
         var p = rebuildStore(stack, child, child.path, cb)
 
         // remove child from the q once we have all the children
-        rbq = _.filter(rbq, function(item) { return item == p.path })
+        rbq = _.reject(rbq, function(item) { return item == p.path })
 
         if (parent.path) {
             // this is a child node coming back
@@ -336,7 +314,7 @@ function rebuildStore(stack, parent, path, cb) {
             parent = _bc(parent, path, p)
         }
 
-        if (rbq.length == 0) {
+        if (rbq.length == 0 && c.length == 0) {
             cb(null, parent)
         }
     }
