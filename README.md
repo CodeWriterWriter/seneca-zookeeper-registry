@@ -1,6 +1,6 @@
 # seneca zookeper plugin
 
-This plugin allows provices acess to zookeeper and will create, get, set, remove, and list paths.
+This plugin provices acess to zookeeper and will create, get, set, remove, and list paths.
 
 
 ## Example
@@ -73,7 +73,7 @@ lists the children for the key.  if the recurse option is set to true, this will
 
 Parameters:
 
-   	* key:   string; key name
+	* key:   string; key name
 	* recurse: boolean; optional with default of false
-	
+
 Response: object; 
